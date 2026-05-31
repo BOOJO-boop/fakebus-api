@@ -41,10 +41,10 @@ class _LoginPageState extends State<LoginPage> {
     setState(() => _cargando = true);
     try {
       final response = await http.post(
-        Uri.parse('https://fakebus-api-production.up.railway.app/'),
+        Uri.parse('https://fakebus-api-production.up.railway.app/login'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
-          'correo': _correoController.text,
+          'correo': _correoController.text.trim(),
           'contrasena': _passController.text,
         }),
       );
@@ -152,7 +152,7 @@ class _RegistroPageState extends State<RegistroPage> {
     setState(() => _cargando = true);
     try {
       final response = await http.post(
-        Uri.parse('http://localhost:5000/registro'),
+        Uri.parse('https://fakebus-api-production.up.railway.app/registro'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           'nombre': _nombreController.text,

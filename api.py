@@ -1,15 +1,14 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import mysql.connector
+import os
 
 app = Flask(__name__)
 CORS(app)
 
-import os
-
 def conectar():
     return mysql.connector.connect(
-        host=os.environ.get('MYSQL_HOST', 'localhost'),
+        host=os.environ.get('MYSQL_HOST', 'https://fakebus-api-production.up.railway.app'),
         user=os.environ.get('MYSQL_USER', 'root'),
         password=os.environ.get('MYSQL_PASSWORD', ''),
         database=os.environ.get('MYSQL_DATABASE', 'fakebus_db'),
@@ -55,7 +54,7 @@ def login():
     finally:
         db.close()
 
-# OBTENER CAMIONES CON OCUPACIÓN
+# OBTENER CAMIONES CON OCUPACIÓN Y PUNTOS DE RUTA
 @app.route('/camiones', methods=['GET'])
 def camiones():
     try:
@@ -63,7 +62,7 @@ def camiones():
         cursor = db.cursor(dictionary=True)
         cursor.execute("""
             SELECT c.id_camion, c.placa, c.modelo, c.capacidad_total,
-                c.latitud, c.longitud,
+                c.latitud, c.longitud, c.color_hex,
                 IFNULL(r.pasajeros_actuales, 0) as pasajeros_actuales
             FROM camiones c
             LEFT JOIN (
@@ -76,12 +75,28 @@ def camiones():
             ) r ON c.id_camion = r.id_camion
         """)
         resultado = cursor.fetchall()
+
+        # Agregar puntos de ruta a cada camión
+        for c in resultado:
+            cursor.execute("""
+                SELECT latitud, longitud
+                FROM puntos_ruta
+                WHERE id_camion = %s
+                ORDER BY orden ASC
+            """, (c['id_camion'],))
+            puntos = cursor.fetchall()
+            # Convertir Decimal a float para que JSON lo serialice bien
+            c['puntos_ruta'] = [
+                {'latitud': float(p['latitud']), 'longitud': float(p['longitud'])}
+                for p in puntos
+            ]
+
         return jsonify(resultado), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 400
     finally:
         db.close()
+
 if __name__ == '__main__':
-    # Railway inyecta el puerto correcto aquí de forma dinámica
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port)

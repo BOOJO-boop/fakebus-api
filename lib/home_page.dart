@@ -32,19 +32,29 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _cargarCamiones() async {
     try {
-      final response = await http.get(Uri.parse('https://fakebus-api-production.up.railway.app/'));
+      final response = await http.get(Uri.parse('https://fakebus-api-production.up.railway.app/camiones'));
+      
+      // Chismoso en consola para monitorear las respuestas en vivo
+      print("STATUS HOME: ${response.statusCode}");
+
       if (response.statusCode == 200) {
         setState(() {
           camiones = jsonDecode(response.body);
           _cargando = false;
         });
+      } else {
+        print("🚨 ERROR SERVIDOR: ${response.body}");
+        setState(() => _cargando = false);
       }
     } catch (e) {
+      // Si algo truena, este print te dirá exactamente en qué línea y por qué
+      print("🚨 EXCEPCIÓN EN HOME_PAGE: $e");
       setState(() => _cargando = false);
     }
   }
 
   Color _colorSemaforo(int pasajeros, int capacidad) {
+    if (capacidad <= 0) return Colors.green;
     double porcentaje = pasajeros / capacidad;
     if (porcentaje < 0.5) return Colors.green;
     if (porcentaje < 0.85) return Colors.orange;
@@ -52,6 +62,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   String _textoSemaforo(int pasajeros, int capacidad) {
+    if (capacidad <= 0) return 'Disponible';
     double porcentaje = pasajeros / capacidad;
     if (porcentaje < 0.5) return 'Disponible';
     if (porcentaje < 0.85) return 'Moderado';
@@ -59,6 +70,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   IconData _iconoSemaforo(int pasajeros, int capacidad) {
+    if (capacidad <= 0) return Icons.sentiment_very_satisfied;
     double porcentaje = pasajeros / capacidad;
     if (porcentaje < 0.5) return Icons.sentiment_very_satisfied;
     if (porcentaje < 0.85) return Icons.sentiment_neutral;
@@ -83,7 +95,6 @@ class _HomePageState extends State<HomePage> {
             icon: const Icon(Icons.map, color: Colors.white),
             onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MapPage())),
           ),
-          
           IconButton(
             icon: const Icon(Icons.refresh, color: Colors.white),
             onPressed: _cargarCamiones,
@@ -99,9 +110,13 @@ class _HomePageState extends State<HomePage> {
                   itemCount: camiones.length,
                   itemBuilder: (context, index) {
                     final c = camiones[index];
-                    final pasajeros = c['pasajeros_actuales'] as int;
-                    final capacidad = c['capacidad_total'] as int;
+                    
+                    // SOLUCIÓN DE TIPOS EXTRAÑOS: Parsea de forma segura por si la base de datos manda strings o doubles
+                    final pasajeros = int.tryParse(c['pasajeros_actuales'].toString()) ?? 0;
+                    final capacidad = int.tryParse(c['capacidad_total'].toString()) ?? 40; // Por si viene nulo, toma 40 por defecto
+                    
                     final color = _colorSemaforo(pasajeros, capacidad);
+                    final porcentajeVal = capacidad > 0 ? (pasajeros / capacidad) : 0.0;
 
                     return Card(
                       margin: const EdgeInsets.only(bottom: 16),
@@ -124,8 +139,8 @@ class _HomePageState extends State<HomePage> {
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
-                                      Text(c['modelo'], style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                                      Text('Placa: ${c['placa']}', style: TextStyle(color: Colors.grey[600])),
+                                      Text(c['modelo'] ?? 'Sin Modelo', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                                      Text('Placa: ${c['placa'] ?? 'S/P'}', style: TextStyle(color: Colors.grey[600])),
                                     ],
                                   ),
                                 ),
@@ -147,14 +162,14 @@ class _HomePageState extends State<HomePage> {
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
                                 Text('$pasajeros / $capacidad pasajeros', style: const TextStyle(fontWeight: FontWeight.w500)),
-                                Text('${((pasajeros / capacidad) * 100).toStringAsFixed(0)}%', style: TextStyle(color: color, fontWeight: FontWeight.bold)),
+                                Text('${(porcentajeVal * 100).toStringAsFixed(0)}%', style: TextStyle(color: color, fontWeight: FontWeight.bold)),
                               ],
                             ),
                             const SizedBox(height: 8),
                             ClipRRect(
                               borderRadius: BorderRadius.circular(8),
                               child: LinearProgressIndicator(
-                                value: pasajeros / capacidad,
+                                value: porcentajeVal,
                                 backgroundColor: Colors.grey[200],
                                 valueColor: AlwaysStoppedAnimation<Color>(color),
                                 minHeight: 12,
