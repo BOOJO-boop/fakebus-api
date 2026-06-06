@@ -76,7 +76,6 @@ def camiones():
         """)
         resultado = cursor.fetchall()
 
-        # Agregar puntos de ruta a cada camión
         for c in resultado:
             cursor.execute("""
                 SELECT latitud, longitud
@@ -85,13 +84,52 @@ def camiones():
                 ORDER BY orden ASC
             """, (c['id_camion'],))
             puntos = cursor.fetchall()
-            # Convertir Decimal a float para que JSON lo serialice bien
             c['puntos_ruta'] = [
                 {'latitud': float(p['latitud']), 'longitud': float(p['longitud'])}
                 for p in puntos
             ]
 
         return jsonify(resultado), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+    finally:
+        db.close()
+
+# OBTENER PASAJEROS ACTUALES DE UN CAMIÓN
+@app.route('/pasajeros/<int:id_camion>', methods=['GET'])
+def obtener_pasajeros(id_camion):
+    try:
+        db = conectar()
+        cursor = db.cursor(dictionary=True)
+        cursor.execute("""
+            SELECT pasajeros_actuales 
+            FROM registros_ocupacion 
+            WHERE id_camion = %s 
+            ORDER BY id_registro DESC 
+            LIMIT 1
+        """, (id_camion,))
+        registro = cursor.fetchone()
+        pasajeros = registro['pasajeros_actuales'] if registro else 0
+        return jsonify({"pasajeros_actuales": pasajeros}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+    finally:
+        db.close()
+
+# ACTUALIZAR UBICACIÓN GPS DESDE LA APP DEL CHOFER
+@app.route('/actualizar_ubicacion', methods=['POST'])
+def actualizar_ubicacion():
+    data = request.json
+    try:
+        db = conectar()
+        cursor = db.cursor()
+        cursor.execute("""
+            UPDATE camiones 
+            SET latitud = %s, longitud = %s 
+            WHERE id_camion = %s
+        """, (data['latitud'], data['longitud'], data['id_camion']))
+        db.commit()
+        return jsonify({"mensaje": "Ubicación actualizada correctamente"}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 400
     finally:
