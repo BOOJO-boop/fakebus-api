@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:http/http.dart' as http;
 
 class DriverPage extends StatefulWidget {
   final String idAutobus; 
@@ -24,12 +26,44 @@ class _DriverPageState extends State<DriverPage> {
     super.dispose();
   }
 
+  Future<void> _fetchPassengers() async {
+    try {
+      final url = Uri.parse('https://fakebus-api-production.up.railway.app/pasajeros/${widget.idAutobus}');
+      final response = await http.get(url);
+      
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        setState(() {
+          _passengerCount = data['pasajeros_actuales'] ?? 0;
+        });
+      }
+    } catch (e) {
+      print("Error consultando pasajeros: $e");
+    }
+  }
+
   void _startPassengerPolling() {
     _passengerTimer = Timer.periodic(const Duration(seconds: 6), (timer) {
       if (_isRouteActive) {
-        print("Consultando cantidad de pasajeros para el camión: ${widget.idAutobus}");
+        _fetchPassengers();
       }
     });
+  }
+
+  Future<void> _updateRouteStatusInBackend(bool active) async {
+    try {
+      final url = Uri.parse('https://fakebus-api-production.up.railway.app/cambiar_estado_ruta');
+      await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'id_camion': int.parse(widget.idAutobus),
+          'activo': active ? 1 : 0,
+        }),
+      );
+    } catch (e) {
+      print("Error actualizando estado de ruta: $e");
+    }
   }
 
   Future<void> _toggleRoute() async {
@@ -37,12 +71,13 @@ class _DriverPageState extends State<DriverPage> {
       _positionStreamSubscription?.cancel();
       _passengerTimer?.cancel();
       
+      await _updateRouteStatusInBackend(false);
+      
       setState(() {
         _isRouteActive = false;
         _passengerCount = 0;
       });
       
-      print("Ruta apagada en la base de datos.");
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Ruta finalizada. El camión ya no es visible para los usuarios.')),
       );
@@ -58,10 +93,13 @@ class _DriverPageState extends State<DriverPage> {
         }
       }
 
+      await _updateRouteStatusInBackend(true);
+
       setState(() {
         _isRouteActive = true;
       });
 
+      _fetchPassengers(); 
       _startPassengerPolling();
 
       _positionStreamSubscription = Geolocator.getPositionStream(
@@ -75,12 +113,25 @@ class _DriverPageState extends State<DriverPage> {
     }
   }
 
-  void _sendGPSToRailway(double lat, double lng) {
-    print("Enviando coordenadas a Railway -> Camión: ${widget.idAutobus}, Lat: $lat, Lng: $lng");
+  Future<void> _sendGPSToRailway(double lat, double lng) async {
+    try {
+      final url = Uri.parse('https://fakebus-api-production.up.railway.app/actualizar_ubicacion');
+      await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'id_camion': int.parse(widget.idAutobus),
+          'latitud': lat,
+          'longitud': lng,
+        }),
+      );
+    } catch (e) {
+      print("Error enviando GPS: $e");
+    }
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(幕ontext context) {
     return Scaffold(
       backgroundColor: Colors.grey[100],
       appBar: AppBar(

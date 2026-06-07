@@ -46,6 +46,8 @@ def login():
         )
         usuario = cursor.fetchone()
         if usuario:
+            if usuario.get('rol') == 'camionero':
+                usuario['id_autobus'] = 1
             return jsonify({"mensaje": "Login exitoso", "usuario": usuario}), 200
         else:
             return jsonify({"error": "Correo o contraseña incorrectos"}), 401
@@ -54,12 +56,13 @@ def login():
     finally:
         db.close()
 
-# OBTENER CAMIONES CON OCUPACIÓN Y PUNTOS DE RUTA
+# OBTENER CAMIONES ACTIVOS (Para la interfaz del pasajero)
 @app.route('/camiones', methods=['GET'])
 def camiones():
     try:
         db = conectar()
         cursor = db.cursor(dictionary=True)
+        # FILTRO: Solo seleccionamos los camiones donde activo = 1
         cursor.execute("""
             SELECT c.id_camion, c.placa, c.modelo, c.capacidad_total,
                 c.latitud, c.longitud, c.color_hex,
@@ -73,6 +76,7 @@ def camiones():
                     WHERE ro2.id_camion = registros_ocupacion.id_camion
                 )
             ) r ON c.id_camion = r.id_camion
+            WHERE c.activo = 1
         """)
         resultado = cursor.fetchall()
 
@@ -116,7 +120,7 @@ def obtener_pasajeros(id_camion):
     finally:
         db.close()
 
-# ACTUALIZAR UBICACIÓN GPS DESDE LA APP DEL CHOFER
+# ACTUALIZAR UBICACIÓN GPS
 @app.route('/actualizar_ubicacion', methods=['POST'])
 def actualizar_ubicacion():
     data = request.json
@@ -130,6 +134,25 @@ def actualizar_ubicacion():
         """, (data['latitud'], data['longitud'], data['id_camion']))
         db.commit()
         return jsonify({"mensaje": "Ubicación actualizada correctamente"}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+    finally:
+        db.close()
+
+# ENCENDER O APAGAR VISIBILIDAD DE LA RUTA
+@app.route('/cambiar_estado_ruta', methods=['POST'])
+def cambiar_estado_ruta():
+    data = request.json
+    try:
+        db = conectar()
+        cursor = db.cursor()
+        cursor.execute("""
+            UPDATE camiones 
+            SET activo = %s 
+            WHERE id_camion = %s
+        """, (data['activo'], data['id_camion']))
+        db.commit()
+        return jsonify({"mensaje": "Estado de ruta actualizado"}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 400
     finally:
