@@ -14,15 +14,13 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  // ── Mapa ──────────────────────────────────────────────
   GoogleMapController? _mapController;
-  Set<Marker>   _markers   = {};
+  Set<Marker> _markers = {};
   Set<Polyline> _polylines = {};
   static const LatLng _parral = LatLng(26.9219, -105.6661);
 
-  // ── Datos ─────────────────────────────────────────────
   List<dynamic> camiones = [];
-  bool  _cargando = true;
+  bool _cargando = true;
   Timer? _timer;
 
   @override
@@ -41,7 +39,6 @@ class _HomePageState extends State<HomePage> {
     super.dispose();
   }
 
-  // ── Helpers ───────────────────────────────────────────
   Color _hexAColor(String? hex) {
     if (hex == null || hex.isEmpty) return AppColors.primaryLight;
     final buffer = StringBuffer();
@@ -74,7 +71,6 @@ class _HomePageState extends State<HomePage> {
     return Icons.sentiment_very_dissatisfied;
   }
 
-  // ── Carga de datos ────────────────────────────────────
   Future<void> _cargarCamiones() async {
     try {
       final response = await http.get(
@@ -86,16 +82,15 @@ class _HomePageState extends State<HomePage> {
       }
 
       final data = jsonDecode(response.body) as List;
-      final Set<Marker>   markers   = {};
+      final Set<Marker> markers = {};
       final Set<Polyline> polylines = {};
 
       for (final c in data) {
         if (c['latitud'] == null || c['longitud'] == null) continue;
 
-        final pasajeros  = int.tryParse(c['pasajeros_actuales'].toString()) ?? 0;
-        final capacidad  = int.tryParse(c['capacidad_total'].toString())    ?? 40;
-        final porcentaje = capacidad > 0 ? pasajeros / capacidad : 0.0;
-        final estado     = _textoSemaforo(pasajeros, capacidad);
+        final pasajeros = int.tryParse(c['pasajeros_actuales'].toString()) ?? 0;
+        final capacidad = int.tryParse(c['capacidad_total'].toString()) ?? 40;
+        final estado = _textoSemaforo(pasajeros, capacidad);
 
         final posicion = LatLng(
           double.parse(c['latitud'].toString()),
@@ -103,10 +98,10 @@ class _HomePageState extends State<HomePage> {
         );
 
         markers.add(Marker(
-          markerId  : MarkerId(c['id_camion'].toString()),
-          position  : posicion,
+          markerId: MarkerId(c['id_camion'].toString()),
+          position: posicion,
           infoWindow: InfoWindow(
-            title  : c['modelo'],
+            title: c['modelo'],
             snippet: '$estado · $pasajeros/$capacidad pasajeros',
           ),
         ));
@@ -115,22 +110,24 @@ class _HomePageState extends State<HomePage> {
         if (puntos != null && (puntos as List).isNotEmpty) {
           polylines.add(Polyline(
             polylineId: PolylineId('ruta_${c['id_camion']}'),
-            points    : puntos
+            points: puntos
                 .map<LatLng>((p) => LatLng(
                       double.parse(p['latitud'].toString()),
                       double.parse(p['longitud'].toString()),
                     ))
                 .toList(),
-            color   : _hexAColor(c['color_hex']),
-            width   : 5,
-            patterns: [],
+            color: _hexAColor(c['color_hex']),
+            width: 5,
+            jointType: JointType.round, // curvas suaves tipo uber
+            startCap: Cap.roundCap,
+            endCap: Cap.roundCap,
           ));
         }
       }
 
       setState(() {
-        camiones  = data;
-        _markers  = markers;
+        camiones = data;
+        _markers = markers;
         _polylines = polylines;
         _cargando = false;
       });
@@ -140,50 +137,45 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  // ── UI ────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: Stack(
         children: [
-          // ── 1. MAPA (fondo completo) ──────────────────
           GoogleMap(
             initialCameraPosition: const CameraPosition(
               target: _parral,
-              zoom  : 13,
+              zoom: 13,
             ),
-            markers                : _markers,
-            polylines              : _polylines,
-            onMapCreated           : (c) => _mapController = c,
-            myLocationEnabled      : true,
+            markers: _markers,
+            polylines: _polylines,
+            onMapCreated: (c) => _mapController = c,
+            myLocationEnabled: true,
             myLocationButtonEnabled: false,
-            zoomControlsEnabled    : false,
+            zoomControlsEnabled: false,
           ),
-
-          // ── 2. HEADER flotante ────────────────────────
           SafeArea(
             child: Padding(
               padding: const EdgeInsets.symmetric(
                 horizontal: AppSpacing.sm,
-                vertical  : AppSpacing.xs,
+                vertical: AppSpacing.xs,
               ),
               child: Row(
                 children: [
-                  // Saludo
                   Expanded(
                     child: Container(
                       padding: const EdgeInsets.symmetric(
                         horizontal: AppSpacing.sm,
-                        vertical  : 10,
+                        vertical: 10,
                       ),
                       decoration: BoxDecoration(
-                        color       : AppColors.surface,
+                        color: AppColors.surface,
                         borderRadius: BorderRadius.circular(AppRadius.card),
-                        boxShadow   : [
+                        boxShadow: [
                           BoxShadow(
-                            color  : Colors.black.withOpacity(0.10),
+                            color: Colors.black.withOpacity(0.10),
                             blurRadius: 8,
-                            offset : const Offset(0, 2),
+                            offset: const Offset(0, 2),
                           ),
                         ],
                       ),
@@ -199,8 +191,8 @@ class _HomePageState extends State<HomePage> {
                               const Text('FakeBus',
                                   style: TextStyle(
                                     fontWeight: FontWeight.bold,
-                                    fontSize  : 15,
-                                    color     : AppColors.primary,
+                                    fontSize: 15,
+                                    color: AppColors.primary,
                                   )),
                               Text(
                                 'Hola, ${widget.nombre.split(' ')[0]}',
@@ -213,13 +205,11 @@ class _HomePageState extends State<HomePage> {
                     ),
                   ),
                   const SizedBox(width: AppSpacing.xs),
-                  // Botón refrescar
                   _FloatButton(
-                    icon     : Icons.refresh,
+                    icon: Icons.refresh,
                     onPressed: _cargarCamiones,
                   ),
                   const SizedBox(width: AppSpacing.xs),
-                  // Botón centrar mapa
                   _FloatButton(
                     icon: Icons.my_location,
                     onPressed: () => _mapController?.animateCamera(
@@ -230,43 +220,38 @@ class _HomePageState extends State<HomePage> {
               ),
             ),
           ),
-
-          // ── 3. PANEL DESLIZABLE (abajo) ───────────────
           DraggableScrollableSheet(
-            initialChildSize: 0.30,  // ocupa 30% al inicio
-            minChildSize    : 0.12,  // mínimo colapsado
-            maxChildSize    : 0.75,  // máximo expandido
+            initialChildSize: 0.30,
+            minChildSize: 0.12,
+            maxChildSize: 0.75,
             builder: (context, scrollController) {
               return Container(
                 decoration: const BoxDecoration(
-                  color       : AppColors.surface,
+                  color: AppColors.surface,
                   borderRadius: BorderRadius.vertical(
                     top: Radius.circular(24),
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color    : Colors.black26,
+                      color: Colors.black26,
                       blurRadius: 12,
-                      offset   : Offset(0, -2),
+                      offset: Offset(0, -2),
                     ),
                   ],
                 ),
                 child: Column(
                   children: [
-                    // Handle
                     Padding(
                       padding: const EdgeInsets.symmetric(vertical: 10),
                       child: Container(
-                        width : 40,
+                        width: 40,
                         height: 4,
                         decoration: BoxDecoration(
-                          color       : AppColors.cardBorder,
+                          color: AppColors.cardBorder,
                           borderRadius: BorderRadius.circular(4),
                         ),
                       ),
                     ),
-
-                    // Título del panel
                     Padding(
                       padding: const EdgeInsets.symmetric(
                         horizontal: AppSpacing.sm,
@@ -282,29 +267,26 @@ class _HomePageState extends State<HomePage> {
                           ),
                           if (_cargando)
                             const SizedBox(
-                              width : 18,
+                              width: 18,
                               height: 18,
-                              child : CircularProgressIndicator(strokeWidth: 2),
+                              child: CircularProgressIndicator(strokeWidth: 2),
                             ),
                         ],
                       ),
                     ),
-
                     const SizedBox(height: AppSpacing.xs),
-
-                    // Lista de tarjetas
                     Expanded(
                       child: camiones.isEmpty && !_cargando
                           ? const Center(
                               child: Text('No hay camiones disponibles'),
                             )
                           : ListView.builder(
-                              controller : scrollController,
-                              padding    : const EdgeInsets.symmetric(
+                              controller: scrollController,
+                              padding: const EdgeInsets.symmetric(
                                 horizontal: AppSpacing.sm,
-                                vertical  : AppSpacing.xs,
+                                vertical: AppSpacing.xs,
                               ),
-                              itemCount  : camiones.length,
+                              itemCount: camiones.length,
                               itemBuilder: (context, index) {
                                 final c = camiones[index];
                                 final pasajeros = int.tryParse(
@@ -318,16 +300,15 @@ class _HomePageState extends State<HomePage> {
                                     capacidad > 0 ? pasajeros / capacidad : 0.0;
 
                                 return _BusTarjeta(
-                                  modelo    : c['modelo'] ?? 'Sin Modelo',
-                                  placa     : c['placa']  ?? 'S/P',
-                                  pasajeros : pasajeros,
-                                  capacidad : capacidad,
+                                  modelo: c['modelo'] ?? 'Sin Modelo',
+                                  placa: c['placa'] ?? 'S/P',
+                                  pasajeros: pasajeros,
+                                  capacidad: capacidad,
                                   porcentaje: porcentaje,
-                                  color     : color,
-                                  texto     : _textoSemaforo(pasajeros, capacidad),
-                                  icono     : _iconoSemaforo(pasajeros, capacidad),
-                                  onTap     : () {
-                                    // Al tocar una tarjeta, centra el mapa en ese camión
+                                  color: color,
+                                  texto: _textoSemaforo(pasajeros, capacidad),
+                                  icono: _iconoSemaforo(pasajeros, capacidad),
+                                  onTap: () {
                                     if (c['latitud'] != null && c['longitud'] != null) {
                                       _mapController?.animateCamera(
                                         CameraUpdate.newLatLngZoom(
@@ -355,7 +336,6 @@ class _HomePageState extends State<HomePage> {
   }
 }
 
-// ── Botón flotante del header ──────────────────────────────
 class _FloatButton extends StatelessWidget {
   const _FloatButton({required this.icon, required this.onPressed});
   final IconData icon;
@@ -365,25 +345,24 @@ class _FloatButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color       : AppColors.surface,
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(AppRadius.input),
-        boxShadow   : [
+        boxShadow: [
           BoxShadow(
-            color    : Colors.black.withOpacity(0.10),
+            color: Colors.black.withOpacity(0.10),
             blurRadius: 8,
-            offset   : const Offset(0, 2),
+            offset: const Offset(0, 2),
           ),
         ],
       ),
       child: IconButton(
-        icon     : Icon(icon, color: AppColors.primary),
+        icon: Icon(icon, color: AppColors.primary),
         onPressed: onPressed,
       ),
     );
   }
 }
 
-// ── Tarjeta de camión ──────────────────────────────────────
 class _BusTarjeta extends StatelessWidget {
   const _BusTarjeta({
     required this.modelo,
@@ -397,13 +376,13 @@ class _BusTarjeta extends StatelessWidget {
     required this.onTap,
   });
 
-  final String   modelo;
-  final String   placa;
-  final int      pasajeros;
-  final int      capacidad;
-  final double   porcentaje;
-  final Color    color;
-  final String   texto;
+  final String modelo;
+  final String placa;
+  final int pasajeros;
+  final int capacidad;
+  final double porcentaje;
+  final Color color;
+  final String texto;
   final IconData icono;
   final VoidCallback onTap;
 
@@ -416,7 +395,7 @@ class _BusTarjeta extends StatelessWidget {
         elevation: 0,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppRadius.card),
-          side        : const BorderSide(color: AppColors.cardBorder),
+          side: const BorderSide(color: AppColors.cardBorder),
         ),
         child: Padding(
           padding: const EdgeInsets.all(AppSpacing.sm),
@@ -426,10 +405,10 @@ class _BusTarjeta extends StatelessWidget {
               Row(
                 children: [
                   Container(
-                    padding   : const EdgeInsets.all(10),
+                    padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
-                      color        : color.withOpacity(0.12),
-                      borderRadius : BorderRadius.circular(AppRadius.input),
+                      color: color.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(AppRadius.input),
                     ),
                     child: Icon(Icons.directions_bus, color: color, size: 28),
                   ),
@@ -444,9 +423,9 @@ class _BusTarjeta extends StatelessWidget {
                     ),
                   ),
                   Container(
-                    padding   : const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                     decoration: BoxDecoration(
-                      color       : color,
+                      color: color,
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Row(
@@ -468,7 +447,7 @@ class _BusTarjeta extends StatelessWidget {
                   Text(
                     '${(porcentaje * 100).toStringAsFixed(0)}%',
                     style: AppTextStyles.cardDetail.copyWith(
-                      color     : color,
+                      color: color,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
@@ -478,10 +457,10 @@ class _BusTarjeta extends StatelessWidget {
               ClipRRect(
                 borderRadius: BorderRadius.circular(8),
                 child: LinearProgressIndicator(
-                  value          : porcentaje,
+                  value: porcentaje,
                   backgroundColor: AppColors.progressBackground,
-                  valueColor     : AlwaysStoppedAnimation<Color>(color),
-                  minHeight      : 10,
+                  valueColor: AlwaysStoppedAnimation<Color>(color),
+                  minHeight: 10,
                 ),
               ),
             ],

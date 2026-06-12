@@ -25,6 +25,9 @@ class _HomePageState extends State<HomePage> {
   bool  _cargando = true;
   Timer? _timer;
 
+  // Memoria temporal para no saturar OSRM cada 5 segundos
+  final Map<int, List<LatLng>> _rutasSuavizadasCache = {};
+
   @override
   void initState() {
     super.initState();
@@ -74,6 +77,36 @@ class _HomePageState extends State<HomePage> {
     return Icons.sentiment_very_dissatisfied;
   }
 
+  // ── Función asíncrona para pegar la ruta a las calles ──
+  Future<void> _suavizarRutaConOSRM(int idCamion, List<LatLng> puntosCrudos) async {
+    if (puntosCrudos.length < 2) return;
+
+    // Formateamos las coordenadas para OSRM: longitud,latitud separadas por punto y coma
+    String coordenadas = puntosCrudos.map((p) => '${p.longitude},${p.latitude}').join(';');
+    final url = Uri.parse('http://router.project-osrm.org/route/v1/driving/$coordenadas?geometries=geojson&overview=full');
+
+    try {
+      final response = await http.get(url);
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['routes'] != null && data['routes'].isNotEmpty) {
+          final List<dynamic> coordinates = data['routes'][0]['geometry']['coordinates'];
+          
+          // OSRM devuelve [longitud, latitud]. Google Maps requiere [latitud, longitud]
+          List<LatLng> puntosSuavizados = coordinates.map((c) => LatLng(c[1], c[0])).toList();
+
+          if (mounted) {
+            setState(() {
+              _rutasSuavizadasCache[idCamion] = puntosSuavizados;
+            });
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Error conectando con OSRM para camión $idCamion: $e');
+    }
+  }
+
   // ── Carga de datos ────────────────────────────────────
   Future<void> _cargarCamiones() async {
     try {
@@ -94,8 +127,8 @@ class _HomePageState extends State<HomePage> {
 
         final pasajeros  = int.tryParse(c['pasajeros_actuales'].toString()) ?? 0;
         final capacidad  = int.tryParse(c['capacidad_total'].toString())    ?? 40;
-        final porcentaje = capacidad > 0 ? pasajeros / capacidad : 0.0;
         final estado     = _textoSemaforo(pasajeros, capacidad);
+        final idCamion   = int.tryParse(c['id_camion'].toString()) ?? 0;
 
         final posicion = LatLng(
           double.parse(c['latitud'].toString()),
@@ -103,7 +136,7 @@ class _HomePageState extends State<HomePage> {
         );
 
         markers.add(Marker(
-          markerId  : MarkerId(c['id_camion'].toString()),
+          markerId  : MarkerId(idCamion.toString()),
           position  : posicion,
           infoWindow: InfoWindow(
             title  : c['modelo'],
@@ -111,26 +144,39 @@ class _HomePageState extends State<HomePage> {
           ),
         ));
 
+        // Trazado de rutas inteligente
         final puntos = c['puntos_ruta'];
         if (puntos != null && (puntos as List).isNotEmpty) {
+          
+          // Si el camión no tiene su ruta optimizada en caché, la creamos
+          if (!_rutasSuavizadasCache.containsKey(idCamion)) {
+            final puntosCrudos = puntos.map<LatLng>((p) => LatLng(
+              double.parse(p['latitud'].toString()),
+              double.parse(p['longitud'].toString()),
+            )).toList();
+
+            // Guardamos los crudos temporalmente mientras OSRM responde
+            _rutasSuavizadasCache[idCamion] = puntosCrudos;
+            // Ejecutamos la consulta en segundo plano para no congelar la app
+            _suavizarRutaConOSRM(idCamion, puntosCrudos);
+          }
+
+          // Añadimos la línea con diseño profesional tipo Uber/Waze
           polylines.add(Polyline(
-            polylineId: PolylineId('ruta_${c['id_camion']}'),
-            points    : puntos
-                .map<LatLng>((p) => LatLng(
-                      double.parse(p['latitud'].toString()),
-                      double.parse(p['longitud'].toString()),
-                    ))
-                .toList(),
-            color   : _hexAColor(c['color_hex']),
-            width   : 5,
-            patterns: [],
+            polylineId: PolylineId('ruta_$idCamion'),
+            points    : _rutasSuavizadasCache[idCamion]!,
+            color     : Colors.black87, // Puedes cambiarlo por _hexAColor(c['color_hex']) si prefieres el color de tu BD
+            width     : 6,               // Línea más gruesa y vistosa
+            jointType : JointType.round, // Curvas suaves en las esquinas de las manzanas
+            startCap  : Cap.roundCap,   // Inicio redondeado profesional
+            endCap    : Cap.roundCap,   // Fin redondeado profesional
           ));
         }
       }
 
       setState(() {
-        camiones  = data;
-        _markers  = markers;
+        camiones   = data;
+        _markers   = markers;
         _polylines = polylines;
         _cargando = false;
       });
@@ -243,14 +289,14 @@ class _HomePageState extends State<HomePage> {
                   borderRadius: BorderRadius.vertical(
                     top: Radius.circular(24),
                   ),
-                  boxShadow: [
-                    BoxShadow(
-                      color    : Colors.black26,
-                      blurRadius: 12,
-                      offset   : Offset(0, -2),
-                    ),
-                  ],
                 ),
+                boxShadow: [
+                  BoxShadow(
+                    color    : Colors.black26,
+                    blurRadius: 12,
+                    offset   : Offset(0, -2),
+                  ),
+                ],
                 child: Column(
                   children: [
                     // Handle
@@ -327,7 +373,6 @@ class _HomePageState extends State<HomePage> {
                                   texto     : _textoSemaforo(pasajeros, capacidad),
                                   icono     : _iconoSemaforo(pasajeros, capacidad),
                                   onTap     : () {
-                                    // Al tocar una tarjeta, centra el mapa en ese camión
                                     if (c['latitud'] != null && c['longitud'] != null) {
                                       _mapController?.animateCamera(
                                         CameraUpdate.newLatLngZoom(
@@ -486,7 +531,7 @@ class _BusTarjeta extends StatelessWidget {
               ),
             ],
           ),
-        ),
+        ],
       ),
     );
   }
