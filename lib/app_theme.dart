@@ -194,7 +194,7 @@ class AppPrimaryButton extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────
-//  THEME DATA GLOBAL
+//  TEMA GLOBAL
 // ─────────────────────────────────────────
 class AppTheme {
   AppTheme._();
