@@ -42,7 +42,9 @@ def conectar():
         user=os.environ.get('MYSQL_USER', 'root'),
         password=os.environ.get('MYSQL_PASSWORD', ''),
         database=os.environ.get('MYSQL_DATABASE', 'fakebus_db'),
-        port=int(os.environ.get('MYSQL_PORT', 3306))
+        port=int(os.environ.get('MYSQL_PORT', 3306)),
+        ssl_ca=os.path.join(os.path.dirname(__file__), 'ca.pem'),
+        ssl_verify_cert=True
     )
 
 
